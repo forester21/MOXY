@@ -5,9 +5,13 @@
 #include "image/img.h"
 
 #define LED_PIN 2
+#define BUTTON_PIN 19 // любой свободный GPIO
 
 bool eyesState = false;
 bool isEyesBaseDrawn = false;
+
+bool ledState = false;
+bool lastButtonState = HIGH;
 
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
 GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT>
@@ -48,12 +52,33 @@ void drawDynamicCuteFace() {
     display.hibernate();
 }
 
+void handleButton() {
+    bool buttonState = !digitalRead(BUTTON_PIN);
+
+    // ловим момент нажатия
+    if (buttonState == HIGH && lastButtonState == LOW) {
+        ledState = !ledState; // переключаем состояние
+        digitalWrite(LED_PIN, ledState);
+        drawDynamicCuteFace();
+        delay(100); // антидребезг (простой)
+    }
+
+    lastButtonState = buttonState;
+}
+
 void setup() {
     Serial.begin(115200);
     Serial.println("e-Paper demo started");
+
+    // Диод
     pinMode(LED_PIN, OUTPUT);
-    display.init(115200, true, 2, false); // USE THIS for Waveshare boards with "clever" reset
-    // circuit, 2ms reset pulse
+    digitalWrite(LED_PIN, LOW);
+
+    // Кнопка
+    pinMode(BUTTON_PIN, INPUT);
+
+    // Дисплей
+    display.init(115200, true, 2, false); // USE THIS for Waveshare boards with "clever" reset circuit, 2ms reset pulse
     display.setRotation(1);
     display.fillScreen(GxEPD_WHITE);
     display.display(false);
@@ -61,6 +86,6 @@ void setup() {
 
 void loop() {
     // blink();
-    drawDynamicCuteFace();
-    delay(5000);
+    handleButton();
+    // delay(5000);
 }
