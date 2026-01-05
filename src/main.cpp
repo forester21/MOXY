@@ -4,6 +4,15 @@
 
 #include "image/img.h"
 
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+
+#define SERVICE_UUID        "12345678-1234-1234-1234-1234567890ab"
+#define CHARACTERISTIC_UUID "abcdefab-1234-5678-1234-abcdefabcdef"
+
+BLECharacteristic *pCharacteristic;
+
 #define LED_PIN 2
 #define BUTTON_PIN 19 // любой свободный GPIO
 
@@ -21,6 +30,42 @@ int heartsMode = 0;
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
 GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT>
 display(GxEPD2_213_B74(/*CS=*/22, /*DC=*/21, /*RST=*/4, /*BUSY=*/17));
+
+
+class LedCallback : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) override {
+        std::string value = pCharacteristic->getValue();
+
+        if (!value.empty()) {
+            if (value[0] == '1') {
+                digitalWrite(LED_PIN, HIGH);
+            } else if (value[0] == '0') {
+                digitalWrite(LED_PIN, LOW);
+            }
+        }
+    }
+};
+
+void setupBle() {
+    BLEDevice::init("ESP32_LED");
+
+    BLEServer *pServer = BLEDevice::createServer();
+    BLEService *pService = pServer->createService(SERVICE_UUID);
+
+    pCharacteristic = pService->createCharacteristic(
+      CHARACTERISTIC_UUID,
+      BLECharacteristic::PROPERTY_READ |
+      BLECharacteristic::PROPERTY_WRITE
+    );
+
+    pCharacteristic->setCallbacks(new LedCallback());
+    pCharacteristic->setValue("0");
+
+    pService->start();
+
+    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+    pAdvertising->start();
+}
 
 void blink() {
     digitalWrite(LED_PIN, HIGH); // включить
@@ -55,39 +100,6 @@ void drawDynamicCuteFace() {
     display.display(true);
     display.hibernate();
 }
-
-const short heartFillingFullY[] = {
-    7, 2,
-    8, 6,
-    9, 7,
-    10, 5,
-    11, 1,
- };
-const short heartFillingFullX[] = {
-    12, 18,
-    11, 12, 13, 17, 18, 19,
-    12, 13, 14, 15, 16, 17, 18,
-    13, 14, 15, 16, 17,
-    15,
- };
-const short heartFillingFullSize = 5;
-
-const short heartFillingHalfY[] = {
-    7, 1,
-    8, 3,
-    9, 4,
-    10, 3,
-    11, 1,
- };
-const short heartFillingHalfX[] = {
-    12,
-    11, 12, 13,
-    12, 13, 14, 15,
-    13, 14, 15,
-    15,
- };
-const short heartFillingHalfSize = 5;
-
 
 void drawHearts() {
     short scale = 4;
@@ -125,10 +137,17 @@ void handleButton() {
         digitalWrite(LED_PIN, false);
         drawHearts();
         digitalWrite(LED_PIN, true);
-        delay(100); // антидребезг (простой)
+        // delay(100); // антидребезг (простой)
     }
 
     lastButtonState = buttonState;
+}
+
+void initDisplay() {
+    display.init(115200, true, 2, false); // USE THIS for Waveshare boards with "clever" reset circuit, 2ms reset pulse
+    display.setRotation(1);
+    display.fillScreen(GxEPD_WHITE);
+    display.display(false);
 }
 
 void setup() {
@@ -143,10 +162,10 @@ void setup() {
     pinMode(BUTTON_PIN, INPUT);
 
     // Дисплей
-    display.init(115200, true, 2, false); // USE THIS for Waveshare boards with "clever" reset circuit, 2ms reset pulse
-    display.setRotation(1);
-    display.fillScreen(GxEPD_WHITE);
-    display.display(false);
+    // initDisplay();
+
+    // BLE
+    setupBle();
 }
 
 void loop() {

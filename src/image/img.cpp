@@ -71,3 +71,35 @@ const short heartsBaseX[] PROGMEM = {
     12, 13, 14, 16, 17, 18, 27, 28, 29, 31, 32, 33, 42, 43, 44, 46, 47, 48,
     14, 15, 16, 29, 30, 31, 44, 45, 46,
  };
+
+const short heartFillingFullY[] PROGMEM = {
+    7, 2,
+    8, 6,
+    9, 7,
+    10, 5,
+    11, 1,
+ };
+const short heartFillingFullX[] PROGMEM = {
+    12, 18,
+    11, 12, 13, 17, 18, 19,
+    12, 13, 14, 15, 16, 17, 18,
+    13, 14, 15, 16, 17,
+    15,
+ };
+const short heartFillingFullSize = 5;
+
+const short heartFillingHalfY[] PROGMEM = {
+    7, 1,
+    8, 3,
+    9, 4,
+    10, 3,
+    11, 1,
+ };
+const short heartFillingHalfX[] PROGMEM = {
+    12,
+    11, 12, 13,
+    12, 13, 14, 15,
+    13, 14, 15,
+    15,
+ };
+const short heartFillingHalfSize = 5;
