@@ -3,6 +3,9 @@
 #include <GxEPD2_BW.h> // библиотека для черно-белых дисплеев
 
 #include "image/img.h"
+#include "image/img_time.h"
+
+#include "wifi/wifi.h"
 
 // #include <BLEDevice.h>
 // #include <BLEServer.h>
@@ -29,6 +32,10 @@ int heartsMode = 0;
 
 int displayMode = 0;
 constexpr int DISPLAY_MODES_COUNT = 3;
+
+int lastMinute = 0;
+unsigned long lastTimeCheck = 0;
+const unsigned long TIME_CHECK_INTERVAL = 1000; // проверяем время раз в секунду
 
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
 GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT>
@@ -109,16 +116,18 @@ void drawHearts(int heartsState) {
     short xOffset = -25;
     short yOffset = -15;
     // if (!isHeartsBaseDrawn) {
-        display.fillScreen(GxEPD_WHITE);
-        draw(scale, xOffset, yOffset, heartsBaseY, 14, heartsBaseX, GxEPD_BLACK);
-        // isHeartsBaseDrawn = true;
+    display.fillScreen(GxEPD_WHITE);
+    draw(scale, xOffset, yOffset, heartsBaseY, 14, heartsBaseX, GxEPD_BLACK);
+    // isHeartsBaseDrawn = true;
     // }
     for (int i = 0; i <= heartsState; i++) {
         if (i % 2 == 0) {
-            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY, heartFillingHalfSize, heartFillingHalfX, GxEPD_BLACK);
+            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY,
+                 heartFillingHalfSize, heartFillingHalfX, GxEPD_BLACK);
         } else {
             // TODO заменить full на правую половину
-            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingFullY, heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
+            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingFullY,
+                 heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
         }
     }
     display.display(true);
@@ -133,12 +142,57 @@ void drawTemp() {
     display.display(true);
 }
 
+void drawNumber(short scale, short xOffset, short yOffset, int number) {
+    switch (number) {
+        case 0:
+            draw(scale, xOffset, yOffset, time0Y, time0Size, time0X, GxEPD_BLACK);
+            break;
+        case 1:
+            draw(scale, xOffset, yOffset, time1Y, time1Size, time1X, GxEPD_BLACK);
+            break;
+        case 2:
+            draw(scale, xOffset, yOffset, time2Y, time2Size, time2X, GxEPD_BLACK);
+            break;
+        case 3:
+            draw(scale, xOffset, yOffset, time3Y, time3Size, time3X, GxEPD_BLACK);
+            break;
+        case 4:
+            draw(scale, xOffset, yOffset, time4Y, time4Size, time4X, GxEPD_BLACK);
+            break;
+        case 5:
+            draw(scale, xOffset, yOffset, time5Y, time5Size, time5X, GxEPD_BLACK);
+            break;
+        case 6:
+            draw(scale, xOffset, yOffset, time6Y, time6Size, time6X, GxEPD_BLACK);
+            break;
+        case 7:
+            draw(scale, xOffset, yOffset, time7Y, time7Size, time7X, GxEPD_BLACK);
+            break;
+        case 8:
+            draw(scale, xOffset, yOffset, time8Y, time8Size, time8X, GxEPD_BLACK);
+            break;
+        case 9:
+            draw(scale, xOffset, yOffset, time9Y, time9Size, time9X, GxEPD_BLACK);
+            break;
+    }
+}
+
 void drawTime() {
     short scale = 8;
     short xOffset = 5;
     short yOffset = 0;
+    struct tm timeinfo;
+    //TODO sync daily
+    if (!getLocalTime(&timeinfo)) {
+        Serial.println("Failed to obtain time");
+    }
+    lastMinute = timeinfo.tm_min;
     display.fillScreen(GxEPD_WHITE);
-    draw(scale, xOffset, yOffset, timeExampleY, timeExampleSize, timeExampleX, GxEPD_BLACK);
+    drawNumber(scale, xOffset, yOffset, timeinfo.tm_hour / 10);
+    drawNumber(scale, xOffset + 6 * scale, yOffset, timeinfo.tm_hour % 10);
+    draw(scale, xOffset, yOffset, delimiterY, delimiterSize, delimiterX, GxEPD_BLACK);
+    drawNumber(scale, xOffset + 15 * scale, yOffset, timeinfo.tm_min / 10);
+    drawNumber(scale, xOffset + 21 * scale, yOffset, timeinfo.tm_min % 10);
     display.display(true);
 }
 
@@ -147,6 +201,7 @@ void handleButton() {
 
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
+        displayMode = (displayMode + 1) % DISPLAY_MODES_COUNT;
         // drawDynamicCuteFace();
         switch (displayMode) {
             case 0:
@@ -160,7 +215,6 @@ void handleButton() {
                 break;
         }
         // delay(100); // антидребезг (простой)
-        displayMode = (displayMode + 1) % DISPLAY_MODES_COUNT;
         // display.hibernate();
     }
 
@@ -174,9 +228,15 @@ void initDisplay() {
     display.display(false);
 }
 
+void setupTime() {
+    // GMT +3 = 3 * 3600
+    const long gmtOffset_sec = 3 * 3600;
+    const int daylightOffset_sec = 0;
+    configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
+}
+
 void setup() {
     Serial.begin(115200);
-    Serial.println("e-Paper demo started");
 
     // Диод
     pinMode(LED_PIN, OUTPUT);
@@ -190,10 +250,34 @@ void setup() {
 
     // BLE
     // setupBle();
+
+    //WIFI
+    setupWiFi();
+
+    // Настройка времени
+    setupTime();
+
+    Serial.println("Waiting for time sync...");
+    delay(2000);
 }
 
 void loop() {
     // blink();
     handleButton();
-    // delay(5000);
+
+    // clock
+    if (displayMode == 1) {
+        unsigned long now = millis();
+        // Проверка времени по таймеру
+        if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
+            lastTimeCheck = now;
+            struct tm timeinfo;
+            getLocalTime(&timeinfo);
+            if (lastMinute != timeinfo.tm_min) {
+                digitalWrite(LED_PIN, HIGH);
+                drawTime();
+                digitalWrite(LED_PIN, LOW);
+            }
+        }
+    }
 }
