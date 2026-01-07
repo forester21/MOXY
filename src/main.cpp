@@ -4,14 +4,14 @@
 
 #include "image/img.h"
 
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
+// #include <BLEDevice.h>
+// #include <BLEServer.h>
+// #include <BLEUtils.h>
 
 #define SERVICE_UUID        "12345678-1234-1234-1234-1234567890ab"
 #define CHARACTERISTIC_UUID "abcdefab-1234-5678-1234-abcdefabcdef"
 
-BLECharacteristic *pCharacteristic;
+// BLECharacteristic *pCharacteristic;
 
 #define LED_PIN 2
 #define BUTTON_PIN 19 // любой свободный GPIO
@@ -27,45 +27,48 @@ bool lastButtonState = HIGH;
 
 int heartsMode = 0;
 
+int displayMode = 0;
+constexpr int DISPLAY_MODES_COUNT = 3;
+
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
 GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT>
 display(GxEPD2_213_B74(/*CS=*/22, /*DC=*/21, /*RST=*/4, /*BUSY=*/17));
 
 
-class LedCallback : public BLECharacteristicCallbacks {
-    void onWrite(BLECharacteristic *pCharacteristic) override {
-        std::string value = pCharacteristic->getValue();
-
-        if (!value.empty()) {
-            if (value[0] == '1') {
-                digitalWrite(LED_PIN, HIGH);
-            } else if (value[0] == '0') {
-                digitalWrite(LED_PIN, LOW);
-            }
-        }
-    }
-};
-
-void setupBle() {
-    BLEDevice::init("ESP32_LED");
-
-    BLEServer *pServer = BLEDevice::createServer();
-    BLEService *pService = pServer->createService(SERVICE_UUID);
-
-    pCharacteristic = pService->createCharacteristic(
-      CHARACTERISTIC_UUID,
-      BLECharacteristic::PROPERTY_READ |
-      BLECharacteristic::PROPERTY_WRITE
-    );
-
-    pCharacteristic->setCallbacks(new LedCallback());
-    pCharacteristic->setValue("0");
-
-    pService->start();
-
-    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-    pAdvertising->start();
-}
+// class LedCallback : public BLECharacteristicCallbacks {
+//     void onWrite(BLECharacteristic *pCharacteristic) override {
+//         std::string value = pCharacteristic->getValue();
+//
+//         if (!value.empty()) {
+//             if (value[0] == '1') {
+//                 digitalWrite(LED_PIN, HIGH);
+//             } else if (value[0] == '0') {
+//                 digitalWrite(LED_PIN, LOW);
+//             }
+//         }
+//     }
+// };
+//
+// void setupBle() {
+//     BLEDevice::init("ESP32_LED");
+//
+//     BLEServer *pServer = BLEDevice::createServer();
+//     BLEService *pService = pServer->createService(SERVICE_UUID);
+//
+//     pCharacteristic = pService->createCharacteristic(
+//       CHARACTERISTIC_UUID,
+//       BLECharacteristic::PROPERTY_READ |
+//       BLECharacteristic::PROPERTY_WRITE
+//     );
+//
+//     pCharacteristic->setCallbacks(new LedCallback());
+//     pCharacteristic->setValue("0");
+//
+//     pService->start();
+//
+//     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+//     pAdvertising->start();
+// }
 
 void blink() {
     digitalWrite(LED_PIN, HIGH); // включить
@@ -101,30 +104,42 @@ void drawDynamicCuteFace() {
     display.hibernate();
 }
 
-void drawHearts() {
-    short scale = 4;
-    short xOffset = 0;
-    short yOffset = 0;
-    if (!isHeartsBaseDrawn) {
+void drawHearts(int heartsState) {
+    short scale = 5;
+    short xOffset = -25;
+    short yOffset = -15;
+    // if (!isHeartsBaseDrawn) {
         display.fillScreen(GxEPD_WHITE);
         draw(scale, xOffset, yOffset, heartsBaseY, 14, heartsBaseX, GxEPD_BLACK);
-        isHeartsBaseDrawn = true;
-    } else {
-        for (int i = 0; i <= heartsState; i++) {
-            if (i % 2 == 0) {
-                draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY, heartFillingHalfSize, heartFillingHalfX, GxEPD_BLACK);
-            } else {
-                // TODO заменить full на правую половину
-                draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingFullY, heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
-            }
-        }
-        heartsState = (heartsState + 1) % 12;
-        if (heartsState == 0) {
-            isHeartsBaseDrawn = false;
+        // isHeartsBaseDrawn = true;
+    // }
+    for (int i = 0; i <= heartsState; i++) {
+        if (i % 2 == 0) {
+            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY, heartFillingHalfSize, heartFillingHalfX, GxEPD_BLACK);
+        } else {
+            // TODO заменить full на правую половину
+            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingFullY, heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
         }
     }
     display.display(true);
-    display.hibernate();
+}
+
+void drawTemp() {
+    short scale = 8;
+    short xOffset = 0;
+    short yOffset = 0;
+    display.fillScreen(GxEPD_WHITE);
+    draw(scale, xOffset, yOffset, tempExampleY, tempExampleSize, tempExampleX, GxEPD_BLACK);
+    display.display(true);
+}
+
+void drawTime() {
+    short scale = 8;
+    short xOffset = 5;
+    short yOffset = 0;
+    display.fillScreen(GxEPD_WHITE);
+    draw(scale, xOffset, yOffset, timeExampleY, timeExampleSize, timeExampleX, GxEPD_BLACK);
+    display.display(true);
 }
 
 void handleButton() {
@@ -132,12 +147,21 @@ void handleButton() {
 
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
-        // ledState = !ledState; // переключаем состояние
         // drawDynamicCuteFace();
-        digitalWrite(LED_PIN, false);
-        drawHearts();
-        digitalWrite(LED_PIN, true);
+        switch (displayMode) {
+            case 0:
+                drawTemp();
+                break;
+            case 1:
+                drawTime();
+                break;
+            case 2:
+                drawHearts(rand() % 12);
+                break;
+        }
         // delay(100); // антидребезг (простой)
+        displayMode = (displayMode + 1) % DISPLAY_MODES_COUNT;
+        // display.hibernate();
     }
 
     lastButtonState = buttonState;
@@ -162,10 +186,10 @@ void setup() {
     pinMode(BUTTON_PIN, INPUT);
 
     // Дисплей
-    // initDisplay();
+    initDisplay();
 
     // BLE
-    setupBle();
+    // setupBle();
 }
 
 void loop() {
