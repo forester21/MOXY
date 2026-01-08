@@ -4,6 +4,7 @@
 
 #include "image/img.h"
 #include "image/img_time.h"
+#include "image/img_temp.h"
 
 #include "wifi/wifi.h"
 
@@ -133,16 +134,7 @@ void drawHearts(int heartsState) {
     display.display(true);
 }
 
-void drawTemp() {
-    short scale = 8;
-    short xOffset = 0;
-    short yOffset = 0;
-    display.fillScreen(GxEPD_WHITE);
-    draw(scale, xOffset, yOffset, tempExampleY, tempExampleSize, tempExampleX, GxEPD_BLACK);
-    display.display(true);
-}
-
-void drawNumber(short scale, short xOffset, short yOffset, int number) {
+void drawSmallNumber(short scale, short xOffset, short yOffset, int number) {
     switch (number) {
         case 0:
             draw(scale, xOffset, yOffset, time0Y, time0Size, time0X, GxEPD_BLACK);
@@ -177,6 +169,66 @@ void drawNumber(short scale, short xOffset, short yOffset, int number) {
     }
 }
 
+void drawBigNumber(short scale, short xOffset, short yOffset, int number) {
+    switch (number) {
+        case 0:
+            draw(scale, xOffset, yOffset, temp0Y, temp0Size, temp0X, GxEPD_BLACK);
+            break;
+        case 1:
+            draw(scale, xOffset, yOffset, temp1Y, temp1Size, temp1X, GxEPD_BLACK);
+            break;
+        case 2:
+            draw(scale, xOffset, yOffset, temp2Y, temp2Size, temp2X, GxEPD_BLACK);
+            break;
+        case 3:
+            draw(scale, xOffset, yOffset, temp3Y, temp3Size, temp3X, GxEPD_BLACK);
+            break;
+        case 4:
+            draw(scale, xOffset, yOffset, temp4Y, temp4Size, temp4X, GxEPD_BLACK);
+            break;
+        case 5:
+            draw(scale, xOffset, yOffset, temp5Y, temp5Size, temp5X, GxEPD_BLACK);
+            break;
+        case 6:
+            draw(scale, xOffset, yOffset, temp6Y, temp6Size, temp6X, GxEPD_BLACK);
+            break;
+        case 7:
+            draw(scale, xOffset, yOffset, temp7Y, temp7Size, temp7X, GxEPD_BLACK);
+            break;
+        case 8:
+            draw(scale, xOffset, yOffset, temp8Y, temp8Size, temp8X, GxEPD_BLACK);
+            break;
+        case 9:
+            draw(scale, xOffset, yOffset, temp9Y, temp9Size, temp9X, GxEPD_BLACK);
+            break;
+    }
+}
+
+void drawTemp() {
+    short scale = 8;
+    short xOffset = 0;
+    short yOffset = 0;
+    int temp = -10;
+    display.fillScreen(GxEPD_WHITE);
+    int firstNumber = abs(temp) / 10;
+    int secondNumber = abs(temp) % 10;
+    draw(scale, xOffset, yOffset, tempDegreeY, tempDegreeSize, tempDegreeX, GxEPD_BLACK);
+    int additionalOffset = 0;
+    drawBigNumber(scale, xOffset + 13 * scale, yOffset, secondNumber);
+    if (firstNumber > 0) {
+        drawSmallNumber(scale, xOffset + additionalOffset + 7 * scale, yOffset, firstNumber);
+    } else {
+        additionalOffset = additionalOffset + 6 * scale;
+    }
+    if (temp < 0) {
+        draw(scale, xOffset + additionalOffset, yOffset, tempMinusY, tempMinusSize, tempMinusX, GxEPD_BLACK);
+    } else if (temp > 0) {
+        draw(scale, xOffset + additionalOffset, yOffset, tempPlusY, tempPlusSize, tempPlusX, GxEPD_BLACK);
+    }
+
+    display.display(true);
+}
+
 void drawTime() {
     short scale = 8;
     short xOffset = 5;
@@ -188,12 +240,26 @@ void drawTime() {
     }
     lastMinute = timeinfo.tm_min;
     display.fillScreen(GxEPD_WHITE);
-    drawNumber(scale, xOffset, yOffset, timeinfo.tm_hour / 10);
-    drawNumber(scale, xOffset + 6 * scale, yOffset, timeinfo.tm_hour % 10);
+    drawSmallNumber(scale, xOffset, yOffset, timeinfo.tm_hour / 10);
+    drawSmallNumber(scale, xOffset + 6 * scale, yOffset, timeinfo.tm_hour % 10);
     draw(scale, xOffset, yOffset, delimiterY, delimiterSize, delimiterX, GxEPD_BLACK);
-    drawNumber(scale, xOffset + 15 * scale, yOffset, timeinfo.tm_min / 10);
-    drawNumber(scale, xOffset + 21 * scale, yOffset, timeinfo.tm_min % 10);
+    drawSmallNumber(scale, xOffset + 15 * scale, yOffset, timeinfo.tm_min / 10);
+    drawSmallNumber(scale, xOffset + 21 * scale, yOffset, timeinfo.tm_min % 10);
     display.display(true);
+}
+
+void drawByState() {
+    switch (displayMode) {
+        case 0:
+            drawTemp();
+            break;
+        case 1:
+            drawTime();
+            break;
+        case 2:
+            drawHearts(rand() % 12);
+            break;
+    }
 }
 
 void handleButton() {
@@ -203,17 +269,7 @@ void handleButton() {
     if (buttonState == HIGH && lastButtonState == LOW) {
         displayMode = (displayMode + 1) % DISPLAY_MODES_COUNT;
         // drawDynamicCuteFace();
-        switch (displayMode) {
-            case 0:
-                drawTemp();
-                break;
-            case 1:
-                drawTime();
-                break;
-            case 2:
-                drawHearts(rand() % 12);
-                break;
-        }
+        drawByState();
         // delay(100); // антидребезг (простой)
         // display.hibernate();
     }
