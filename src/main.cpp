@@ -1,6 +1,9 @@
 #include <Arduino.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <GxEPD2_BW.h> // библиотека для черно-белых дисплеев
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <math.h>
 
 #include "image/img.h"
 #include "image/img_time.h"
@@ -41,6 +44,9 @@ const unsigned long TIME_CHECK_INTERVAL = 1000; // проверяем время
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
 GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT>
 display(GxEPD2_213_B74(/*CS=*/22, /*DC=*/21, /*RST=*/4, /*BUSY=*/17));
+
+unsigned long lastScreenUpdate = 0;
+const unsigned long SCREEN_UPDATE_INTERVAL = 5UL * 1000UL; // обновляем экран раз в 5 секунд
 
 
 // class LedCallback : public BLECharacteristicCallbacks {
@@ -204,11 +210,19 @@ void drawBigNumber(short scale, short xOffset, short yOffset, int number) {
     }
 }
 
+const char* weatherUrl =
+  "https://api.open-meteo.com/v1/forecast?latitude=55.998227&longitude=37.210115&current=temperature_2m";
+
+int temp = 0;
+
+// раз в 15 минут
+const unsigned long TEMP_UPDATE_INTERVAL = 15UL * 60UL * 1000UL;
+unsigned long lastTempUpdate = 0;
+
 void drawTemp() {
     short scale = 8;
     short xOffset = 0;
     short yOffset = 0;
-    int temp = -10;
     display.fillScreen(GxEPD_WHITE);
     int firstNumber = abs(temp) / 10;
     int secondNumber = abs(temp) % 10;
@@ -262,14 +276,18 @@ void drawByState() {
     }
 }
 
+void drawNextScreen() {
+    displayMode = (displayMode + 1) % DISPLAY_MODES_COUNT;
+    drawByState();
+}
+
 void handleButton() {
     bool buttonState = !digitalRead(BUTTON_PIN);
 
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
-        displayMode = (displayMode + 1) % DISPLAY_MODES_COUNT;
+        drawNextScreen();
         // drawDynamicCuteFace();
-        drawByState();
         // delay(100); // антидребезг (простой)
         // display.hibernate();
     }
@@ -289,6 +307,28 @@ void setupTime() {
     const long gmtOffset_sec = 3 * 3600;
     const int daylightOffset_sec = 0;
     configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
+}
+
+void fetchTemperature() {
+    digitalWrite(LED_PIN, HIGH);
+    if (WiFi.status() != WL_CONNECTED) return;
+
+    HTTPClient http;
+    String url = String(weatherUrl);
+
+    http.begin(url);
+    int httpCode = http.GET();
+
+    if (httpCode == 200) {
+        DynamicJsonDocument doc(2048);
+        deserializeJson(doc, http.getString());
+
+        temp = round(doc["current"]["temperature_2m"].as<float>());
+    }
+
+    http.end();
+
+    digitalWrite(LED_PIN, LOW);
 }
 
 void setup() {
@@ -315,25 +355,36 @@ void setup() {
 
     Serial.println("Waiting for time sync...");
     delay(2000);
+    fetchTemperature();
 }
 
 void loop() {
     // blink();
+    // handleButton();
+    unsigned long now = millis();
     handleButton();
 
-    // clock
-    if (displayMode == 1) {
-        unsigned long now = millis();
-        // Проверка времени по таймеру
-        if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
-            lastTimeCheck = now;
-            struct tm timeinfo;
-            getLocalTime(&timeinfo);
-            if (lastMinute != timeinfo.tm_min) {
-                digitalWrite(LED_PIN, HIGH);
-                drawTime();
-                digitalWrite(LED_PIN, LOW);
-            }
-        }
+    if (now - lastScreenUpdate >= SCREEN_UPDATE_INTERVAL) {
+        lastScreenUpdate = now;
+        drawNextScreen();
     }
+
+    // temperature update
+    if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
+        lastTempUpdate = now;
+        fetchTemperature();
+    }
+
+    // clock
+    // if (displayMode == 1) {
+    //     // Проверка времени по таймеру
+    //     if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
+    //         lastTimeCheck = now;
+    //         struct tm timeinfo;
+    //         getLocalTime(&timeinfo);
+    //         if (lastMinute != timeinfo.tm_min) {
+    //             drawTime();
+    //         }
+    //     }
+    // }
 }
