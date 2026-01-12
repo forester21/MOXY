@@ -1,95 +1,37 @@
 #include <Arduino.h>
-#include <Fonts/FreeMonoBold9pt7b.h>
 #include <GxEPD2_BW.h> // библиотека для черно-белых дисплеев
 #include <HTTPClient.h>
-#include <ArduinoJson.h>
-#include <math.h>
 
 #include "image/img.h"
 #include "image/img_time.h"
 #include "image/img_temp.h"
 
 #include "wifi/wifi.h"
-
-// #include <BLEDevice.h>
-// #include <BLEServer.h>
-// #include <BLEUtils.h>
-
-#define SERVICE_UUID        "12345678-1234-1234-1234-1234567890ab"
-#define CHARACTERISTIC_UUID "abcdefab-1234-5678-1234-abcdefabcdef"
-
-// BLECharacteristic *pCharacteristic;
+#include "temperature/Temperature.h"
 
 #define LED_PIN 2
 #define BUTTON_PIN 19 // любой свободный GPIO
 
-bool eyesState = false;
-bool isEyesBaseDrawn = false;
+// Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
+GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=*/22, /*DC=*/21, /*RST=*/4, /*BUSY=*/17));
 
-bool isHeartsBaseDrawn = false;
-short heartsState = 0;
-
-bool ledState = false;
+// Кнопка
 bool lastButtonState = HIGH;
 
-int heartsMode = 0;
-
-int displayMode = 0;
-constexpr int DISPLAY_MODES_COUNT = 3;
-
+// Обновление времени
 int lastMinute = 0;
 unsigned long lastTimeCheck = 0;
 const unsigned long TIME_CHECK_INTERVAL = 1000; // проверяем время раз в секунду
 
-// Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
-GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT>
-display(GxEPD2_213_B74(/*CS=*/22, /*DC=*/21, /*RST=*/4, /*BUSY=*/17));
-
+// Обновление экрана
 unsigned long lastScreenUpdate = 0;
-const unsigned long SCREEN_UPDATE_INTERVAL = 5UL * 1000UL; // обновляем экран раз в 5 секунд
+const unsigned long SCREEN_UPDATE_INTERVAL = 60UL * 1000UL; // обновляем экран раз в 1 минуту
+int displayMode = 0;
+constexpr int DISPLAY_MODES_COUNT = 3;
 
-
-// class LedCallback : public BLECharacteristicCallbacks {
-//     void onWrite(BLECharacteristic *pCharacteristic) override {
-//         std::string value = pCharacteristic->getValue();
-//
-//         if (!value.empty()) {
-//             if (value[0] == '1') {
-//                 digitalWrite(LED_PIN, HIGH);
-//             } else if (value[0] == '0') {
-//                 digitalWrite(LED_PIN, LOW);
-//             }
-//         }
-//     }
-// };
-//
-// void setupBle() {
-//     BLEDevice::init("ESP32_LED");
-//
-//     BLEServer *pServer = BLEDevice::createServer();
-//     BLEService *pService = pServer->createService(SERVICE_UUID);
-//
-//     pCharacteristic = pService->createCharacteristic(
-//       CHARACTERISTIC_UUID,
-//       BLECharacteristic::PROPERTY_READ |
-//       BLECharacteristic::PROPERTY_WRITE
-//     );
-//
-//     pCharacteristic->setCallbacks(new LedCallback());
-//     pCharacteristic->setValue("0");
-//
-//     pService->start();
-//
-//     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-//     pAdvertising->start();
-// }
-
-void blink() {
-    digitalWrite(LED_PIN, HIGH); // включить
-    delay(5000);
-    digitalWrite(LED_PIN, LOW); // выключить
-    delay(5000);
-}
+// Обновление температуры
+unsigned long lastTempUpdate = 0;
+const unsigned long TEMP_UPDATE_INTERVAL = 15UL * 60UL * 1000UL; // обновляем температуру каждые 15 минут
 
 void draw(short scale, short xOffset, short yOffset, const short y[], int ySize, const short x[], uint16_t color) {
     int xIndex = 0;
@@ -100,6 +42,9 @@ void draw(short scale, short xOffset, short yOffset, const short y[], int ySize,
         }
     }
 }
+
+bool eyesState = false;
+bool isEyesBaseDrawn = false;
 
 void drawDynamicCuteFace() {
     short scale = 8;
@@ -122,11 +67,8 @@ void drawHearts(int heartsState) {
     short scale = 5;
     short xOffset = -25;
     short yOffset = -15;
-    // if (!isHeartsBaseDrawn) {
     display.fillScreen(GxEPD_WHITE);
     draw(scale, xOffset, yOffset, heartsBaseY, 14, heartsBaseX, GxEPD_BLACK);
-    // isHeartsBaseDrawn = true;
-    // }
     for (int i = 0; i <= heartsState; i++) {
         if (i % 2 == 0) {
             draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY,
@@ -210,22 +152,18 @@ void drawBigNumber(short scale, short xOffset, short yOffset, int number) {
     }
 }
 
-const char* weatherUrl =
-  "https://api.open-meteo.com/v1/forecast?latitude=55.998227&longitude=37.210115&current=temperature_2m";
+const char *weatherUrl =
+        "https://api.open-meteo.com/v1/forecast?latitude=55.998227&longitude=37.210115&current=temperature_2m";
 
-int temp = 0;
-
-// раз в 15 минут
-const unsigned long TEMP_UPDATE_INTERVAL = 15UL * 60UL * 1000UL;
-unsigned long lastTempUpdate = 0;
+Temperature temperature(weatherUrl, LED_PIN);
 
 void drawTemp() {
     short scale = 8;
     short xOffset = 0;
     short yOffset = 0;
     display.fillScreen(GxEPD_WHITE);
-    int firstNumber = abs(temp) / 10;
-    int secondNumber = abs(temp) % 10;
+    int firstNumber = abs(temperature.get()) / 10;
+    int secondNumber = abs(temperature.get()) % 10;
     draw(scale, xOffset, yOffset, tempDegreeY, tempDegreeSize, tempDegreeX, GxEPD_BLACK);
     int additionalOffset = 0;
     drawBigNumber(scale, xOffset + 13 * scale, yOffset, secondNumber);
@@ -234,9 +172,9 @@ void drawTemp() {
     } else {
         additionalOffset = additionalOffset + 6 * scale;
     }
-    if (temp < 0) {
+    if (temperature.get() < 0) {
         draw(scale, xOffset + additionalOffset, yOffset, tempMinusY, tempMinusSize, tempMinusX, GxEPD_BLACK);
-    } else if (temp > 0) {
+    } else if (temperature.get() > 0) {
         draw(scale, xOffset + additionalOffset, yOffset, tempPlusY, tempPlusSize, tempPlusX, GxEPD_BLACK);
     }
 
@@ -287,6 +225,7 @@ void handleButton() {
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
         drawNextScreen();
+        lastScreenUpdate = millis();
         // drawDynamicCuteFace();
         // delay(100); // антидребезг (простой)
         // display.hibernate();
@@ -307,29 +246,10 @@ void setupTime() {
     const long gmtOffset_sec = 3 * 3600;
     const int daylightOffset_sec = 0;
     configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
+    Serial.println("Waiting for time sync...");
+    delay(2000);
 }
 
-void fetchTemperature() {
-    digitalWrite(LED_PIN, HIGH);
-    if (WiFi.status() != WL_CONNECTED) return;
-
-    HTTPClient http;
-    String url = String(weatherUrl);
-
-    http.begin(url);
-    int httpCode = http.GET();
-
-    if (httpCode == 200) {
-        DynamicJsonDocument doc(2048);
-        deserializeJson(doc, http.getString());
-
-        temp = round(doc["current"]["temperature_2m"].as<float>());
-    }
-
-    http.end();
-
-    digitalWrite(LED_PIN, LOW);
-}
 
 void setup() {
     Serial.begin(115200);
@@ -353,14 +273,10 @@ void setup() {
     // Настройка времени
     setupTime();
 
-    Serial.println("Waiting for time sync...");
-    delay(2000);
-    fetchTemperature();
+    temperature.fetch();
 }
 
 void loop() {
-    // blink();
-    // handleButton();
     unsigned long now = millis();
     handleButton();
 
@@ -372,19 +288,19 @@ void loop() {
     // temperature update
     if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
         lastTempUpdate = now;
-        fetchTemperature();
+        temperature.fetch();
     }
 
     // clock
-    // if (displayMode == 1) {
-    //     // Проверка времени по таймеру
-    //     if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
-    //         lastTimeCheck = now;
-    //         struct tm timeinfo;
-    //         getLocalTime(&timeinfo);
-    //         if (lastMinute != timeinfo.tm_min) {
-    //             drawTime();
-    //         }
-    //     }
-    // }
+    if (displayMode == 1) {
+        // Проверка времени по таймеру
+        if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
+            lastTimeCheck = now;
+            struct tm timeinfo;
+            getLocalTime(&timeinfo);
+            if (lastMinute != timeinfo.tm_min) {
+                drawTime();
+            }
+        }
+    }
 }

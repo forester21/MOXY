@@ -16,3 +16,11 @@ void setupWiFi() {
 
     Serial.println("\nWiFi connected");
 }
+
+void checkWiFiConnection() {
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi disconnected, reconnecting...");
+        WiFi.disconnect();
+        setupWiFi();
+    }
+}
