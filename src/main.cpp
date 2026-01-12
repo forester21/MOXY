@@ -28,6 +28,8 @@ unsigned long lastScreenUpdate = 0;
 const unsigned long SCREEN_UPDATE_INTERVAL = 60UL * 1000UL; // обновляем экран раз в 1 минуту
 int displayMode = 0;
 constexpr int DISPLAY_MODES_COUNT = 3;
+int screenRefreshCounter = 0;
+const int FULL_REFRESH_AFTER = 100; // полное обновление экрана после N частичных обновлений
 
 // Обновление температуры
 unsigned long lastTempUpdate = 0;
@@ -43,10 +45,24 @@ void draw(short scale, short xOffset, short yOffset, const short y[], int ySize,
     }
 }
 
+void displayFullRefreshIfRequired() {
+    if (screenRefreshCounter > FULL_REFRESH_AFTER) {
+        display.fillScreen(GxEPD_WHITE);
+        display.display(false);
+        screenRefreshCounter = 0;
+    }
+}
+
+void displayRefresh() {
+    display.display(true);
+    screenRefreshCounter++;
+}
+
 bool eyesState = false;
 bool isEyesBaseDrawn = false;
 
 void drawDynamicCuteFace() {
+    displayFullRefreshIfRequired();
     short scale = 8;
     short xOffset = 0;
     short yOffset = 0;
@@ -59,7 +75,7 @@ void drawDynamicCuteFace() {
         draw(scale, xOffset, yOffset, eyesBaseY, 8, eyesBaseX, GxEPD_BLACK);
         isEyesBaseDrawn = true;
     }
-    display.display(true);
+    displayRefresh();
     display.hibernate();
 }
 
@@ -79,7 +95,7 @@ void drawHearts(int heartsState) {
                  heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
         }
     }
-    display.display(true);
+    displayRefresh();
 }
 
 void drawSmallNumber(short scale, short xOffset, short yOffset, int number) {
@@ -178,7 +194,7 @@ void drawTemp() {
         draw(scale, xOffset + additionalOffset, yOffset, tempPlusY, tempPlusSize, tempPlusX, GxEPD_BLACK);
     }
 
-    display.display(true);
+    displayRefresh();
 }
 
 void drawTime() {
@@ -197,10 +213,11 @@ void drawTime() {
     draw(scale, xOffset, yOffset, delimiterY, delimiterSize, delimiterX, GxEPD_BLACK);
     drawSmallNumber(scale, xOffset + 15 * scale, yOffset, timeinfo.tm_min / 10);
     drawSmallNumber(scale, xOffset + 21 * scale, yOffset, timeinfo.tm_min % 10);
-    display.display(true);
+    displayRefresh();
 }
 
 void drawByState() {
+    displayFullRefreshIfRequired();
     switch (displayMode) {
         case 0:
             drawTemp();
@@ -219,13 +236,13 @@ void drawNextScreen() {
     drawByState();
 }
 
-void handleButton() {
+void handleButton(unsigned int now) {
     bool buttonState = !digitalRead(BUTTON_PIN);
 
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
         drawNextScreen();
-        lastScreenUpdate = millis();
+        lastScreenUpdate = now;
         // drawDynamicCuteFace();
         // delay(100); // антидребезг (простой)
         // display.hibernate();
@@ -278,7 +295,7 @@ void setup() {
 
 void loop() {
     unsigned long now = millis();
-    handleButton();
+    handleButton(now);
 
     if (now - lastScreenUpdate >= SCREEN_UPDATE_INTERVAL) {
         lastScreenUpdate = now;
