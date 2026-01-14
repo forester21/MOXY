@@ -1,8 +1,8 @@
 from collections import defaultdict
 from PIL import Image
 
-prefix = "time4"
-img = Image.open("./time/4.png").convert("RGBA")
+prefix = "ppm"
+img = Image.open("./co2/ppm.png").convert("RGBA")
 pixels = img.load()
 
 rows = defaultdict(list)

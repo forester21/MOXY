@@ -9,11 +9,20 @@
 #include "wifi/wifi.h"
 #include "temperature/Temperature.h"
 
+#include <S8_UART.h>
+#include <HardwareSerial.h>
+
 #define LED_PIN 2
 #define BUTTON_PIN 19 // любой свободный GPIO
 
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
 GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=*/22, /*DC=*/21, /*RST=*/4, /*BUSY=*/17));
+
+// Датчик CO2
+#define S8_RX_PIN 32
+#define S8_TX_PIN 33
+HardwareSerial S8Serial(2);
+S8_UART s8(S8Serial);
 
 // Кнопка
 bool lastButtonState = HIGH;
@@ -77,25 +86,6 @@ void drawDynamicCuteFace() {
     }
     displayRefresh();
     display.hibernate();
-}
-
-void drawHearts(int heartsState) {
-    short scale = 5;
-    short xOffset = -25;
-    short yOffset = -15;
-    display.fillScreen(GxEPD_WHITE);
-    draw(scale, xOffset, yOffset, heartsBaseY, 14, heartsBaseX, GxEPD_BLACK);
-    for (int i = 0; i <= heartsState; i++) {
-        if (i % 2 == 0) {
-            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY,
-                 heartFillingHalfSize, heartFillingHalfX, GxEPD_BLACK);
-        } else {
-            // TODO заменить full на правую половину
-            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingFullY,
-                 heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
-        }
-    }
-    displayRefresh();
 }
 
 void drawSmallNumber(short scale, short xOffset, short yOffset, int number) {
@@ -168,6 +158,58 @@ void drawBigNumber(short scale, short xOffset, short yOffset, int number) {
     }
 }
 
+void drawHearts() {
+    int co2ppm = s8.get_co2();
+
+    Serial.print("CO2: ");
+    Serial.print(co2ppm);
+    Serial.println(" ppm");
+
+    int highestLevel = 1600;
+    // int highLevel = 1200;
+    // int mediumLevel = 800;
+    int lowLevel = 400;
+
+    // 0 to 11
+    int heartsState = 0;
+    if (co2ppm > highestLevel) {
+        heartsState = 0;
+    } else if (co2ppm > lowLevel) {
+        heartsState = 10 - (co2ppm - lowLevel) / ((highestLevel - lowLevel) / 12);
+    } else {
+        heartsState = 11;
+    }
+
+    short scale = 5;
+    short xOffset = -25;
+    short yOffset = -15;
+    // short yOffset = 0;
+    display.fillScreen(GxEPD_WHITE);
+    draw(scale, xOffset, yOffset, heartsBaseY, 14, heartsBaseX, GxEPD_BLACK);
+    for (int i = 0; i <= heartsState; i++) {
+        if (i % 2 == 0) {
+            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY,
+                 heartFillingHalfSize, heartFillingHalfX, GxEPD_BLACK);
+        } else {
+            // TODO заменить full на правую половину
+            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingFullY,
+                 heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
+        }
+    }
+    short numberScale = 2;
+    // short numberScale = 1;
+    int numberOffset = 0;
+    if (co2ppm >= 1000) {
+        drawSmallNumber(numberScale, 0, 0, co2ppm / 1000);
+        numberOffset = 6 * numberScale;
+    }
+    drawSmallNumber(numberScale, numberOffset, 0, (co2ppm / 100) % 10);
+    drawSmallNumber(numberScale, numberOffset + 6 * numberScale, 0, (co2ppm / 10) % 10);
+    drawSmallNumber(numberScale, numberOffset + 12 * numberScale, 0, co2ppm % 10);
+    // draw(numberScale, numberOffset + 18 * numberScale, 3, ppmY, ppmSize, ppmX, GxEPD_BLACK);
+    displayRefresh();
+}
+
 const char *weatherUrl =
         "https://api.open-meteo.com/v1/forecast?latitude=55.998227&longitude=37.210115&current=temperature_2m";
 
@@ -226,7 +268,7 @@ void drawByState() {
             drawTime();
             break;
         case 2:
-            drawHearts(rand() % 12);
+            drawHearts();
             break;
     }
 }
@@ -267,6 +309,14 @@ void setupTime() {
     delay(2000);
 }
 
+void setupSenseAir() {
+    delay(1000);
+
+    // Инициализация UART для S8
+    S8Serial.begin(9600, SERIAL_8N1, S8_TX_PIN, S8_RX_PIN);
+
+    Serial.println("SenseAir S8 init...");
+}
 
 void setup() {
     Serial.begin(115200);
@@ -281,43 +331,47 @@ void setup() {
     // Дисплей
     initDisplay();
 
+    // Датчик CO2
+    setupSenseAir();
+
     // BLE
     // setupBle();
 
     //WIFI
-    setupWiFi();
+    // setupWiFi();
 
     // Настройка времени
-    setupTime();
+    // setupTime();
 
-    temperature.fetch();
+    // temperature.fetch();
 }
 
 void loop() {
     unsigned long now = millis();
-    handleButton(now);
+    // handleButton(now);
 
-    if (now - lastScreenUpdate >= SCREEN_UPDATE_INTERVAL) {
-        lastScreenUpdate = now;
-        drawNextScreen();
-    }
+    drawHearts();
+    delay(60000);
 
-    // temperature update
-    if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
-        lastTempUpdate = now;
-        temperature.fetch();
-    }
+    // if (now - lastScreenUpdate >= SCREEN_UPDATE_INTERVAL) {
+    //     lastScreenUpdate = now;
+    //     drawNextScreen();
+    // }
 
-    // clock
-    if (displayMode == 1) {
-        // Проверка времени по таймеру
-        if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
-            lastTimeCheck = now;
-            struct tm timeinfo;
-            getLocalTime(&timeinfo);
-            if (lastMinute != timeinfo.tm_min) {
-                drawTime();
-            }
-        }
-    }
+    // if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
+    //     lastTempUpdate = now;
+    //     temperature.fetch();
+    // }
+
+    // if (displayMode == 1) {
+    //     // Проверка времени по таймеру
+    //     if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
+    //         lastTimeCheck = now;
+    //         struct tm timeinfo;
+    //         getLocalTime(&timeinfo);
+    //         if (lastMinute != timeinfo.tm_min) {
+    //             drawTime();
+    //         }
+    //     }
+    // }
 }
