@@ -12,16 +12,29 @@
 #include <S8_UART.h>
 #include <HardwareSerial.h>
 
-#define LED_PIN 2
-#define BUTTON_PIN 19 // любой свободный GPIO
+// #define LED_PIN 2
+// #define BUTTON_PIN 19
+// #define S8_RX_PIN 32
+// #define S8_TX_PIN 33
+// #define DISPLAY_CS_PIN 22
+// #define DISPLAY_DC_PIN 21
+// #define DISPLAY_RST_PIN 4
+// #define DISPLAY_BUSY_PIN 17
+// HardwareSerial S8Serial(2);
+
+#define LED_PIN 8
+#define BUTTON_PIN 21
+#define S8_RX_PIN 10
+#define S8_TX_PIN 20
+#define DISPLAY_CS_PIN 3
+#define DISPLAY_DC_PIN 2
+#define DISPLAY_RST_PIN 1
+#define DISPLAY_BUSY_PIN 0
+HardwareSerial S8Serial(1);
 
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
-GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(/*CS=*/22, /*DC=*/21, /*RST=*/4, /*BUSY=*/17));
+GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
 
-// Датчик CO2
-#define S8_RX_PIN 32
-#define S8_TX_PIN 33
-HardwareSerial S8Serial(2);
 S8_UART s8(S8Serial);
 
 // Кнопка
@@ -33,10 +46,9 @@ unsigned long lastTimeCheck = 0;
 const unsigned long TIME_CHECK_INTERVAL = 1000; // проверяем время раз в секунду
 
 // Обновление экрана
-unsigned long lastScreenUpdate = 0;
-const unsigned long SCREEN_UPDATE_INTERVAL = 60UL * 1000UL; // обновляем экран раз в 1 минуту
+unsigned long lastCO2Update = 0;
+const unsigned long CO2_UPDATE_INTERVAL = 60UL * 1000UL; // обновляем CO2 раз в минуту
 int displayMode = 0;
-constexpr int DISPLAY_MODES_COUNT = 3;
 int screenRefreshCounter = 0;
 const int FULL_REFRESH_AFTER = 100; // полное обновление экрана после N частичных обновлений
 
@@ -85,7 +97,6 @@ void drawDynamicCuteFace() {
         isEyesBaseDrawn = true;
     }
     displayRefresh();
-    display.hibernate();
 }
 
 void drawSmallNumber(short scale, short xOffset, short yOffset, int number) {
@@ -161,13 +172,11 @@ void drawBigNumber(short scale, short xOffset, short yOffset, int number) {
 void drawHearts() {
     int co2ppm = s8.get_co2();
 
-    Serial.print("CO2: ");
-    Serial.print(co2ppm);
-    Serial.println(" ppm");
+    // Serial.print("CO2: ");
+    // Serial.print(co2ppm);
+    // Serial.println(" ppm");
 
     int highestLevel = 1600;
-    // int highLevel = 1200;
-    // int mediumLevel = 800;
     int lowLevel = 400;
 
     // 0 to 11
@@ -183,22 +192,29 @@ void drawHearts() {
     short scale = 5;
     short xOffset = -25;
     short yOffset = -15;
-    // short yOffset = 0;
     display.fillScreen(GxEPD_WHITE);
     draw(scale, xOffset, yOffset, heartsBaseY, 14, heartsBaseX, GxEPD_BLACK);
-    for (int i = 0; i <= heartsState; i++) {
-        if (i % 2 == 0) {
-            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY,
-                 heartFillingHalfSize, heartFillingHalfX, GxEPD_BLACK);
-        } else {
-            // TODO заменить full на правую половину
-            draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingFullY,
-                 heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
+    if (heartsState >= 0) {
+        for (int i = 0; i <= heartsState; i++) {
+            if (i % 2 == 0) {
+                draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY,
+                     heartFillingHalfSize, heartFillingHalfX, GxEPD_BLACK);
+            } else {
+                // TODO заменить full на правую половину
+                draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingFullY,
+                     heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
+            }
         }
     }
-    short numberScale = 2;
-    // short numberScale = 1;
+    displayRefresh();
+}
+
+void drawPPM() {
+    int co2ppm = s8.get_co2();
+
+    short numberScale = 8;
     int numberOffset = 0;
+    display.fillScreen(GxEPD_WHITE);
     if (co2ppm >= 1000) {
         drawSmallNumber(numberScale, 0, 0, co2ppm / 1000);
         numberOffset = 6 * numberScale;
@@ -206,7 +222,7 @@ void drawHearts() {
     drawSmallNumber(numberScale, numberOffset, 0, (co2ppm / 100) % 10);
     drawSmallNumber(numberScale, numberOffset + 6 * numberScale, 0, (co2ppm / 10) % 10);
     drawSmallNumber(numberScale, numberOffset + 12 * numberScale, 0, co2ppm % 10);
-    // draw(numberScale, numberOffset + 18 * numberScale, 3, ppmY, ppmSize, ppmX, GxEPD_BLACK);
+    draw(3, numberOffset + 19 * numberScale, 3, ppmY, ppmSize, ppmX, GxEPD_BLACK);
     displayRefresh();
 }
 
@@ -258,6 +274,7 @@ void drawTime() {
     displayRefresh();
 }
 
+constexpr int DISPLAY_MODES_COUNT = 4;
 void drawByState() {
     displayFullRefreshIfRequired();
     switch (displayMode) {
@@ -270,6 +287,9 @@ void drawByState() {
         case 2:
             drawHearts();
             break;
+        case 3:
+            drawPPM();
+            break;
     }
 }
 
@@ -278,16 +298,12 @@ void drawNextScreen() {
     drawByState();
 }
 
-void handleButton(unsigned int now) {
+void handleButton() {
     bool buttonState = !digitalRead(BUTTON_PIN);
 
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
         drawNextScreen();
-        lastScreenUpdate = now;
-        // drawDynamicCuteFace();
-        // delay(100); // антидребезг (простой)
-        // display.hibernate();
     }
 
     lastButtonState = buttonState;
@@ -310,8 +326,6 @@ void setupTime() {
 }
 
 void setupSenseAir() {
-    delay(1000);
-
     // Инициализация UART для S8
     S8Serial.begin(9600, SERIAL_8N1, S8_TX_PIN, S8_RX_PIN);
 
@@ -319,7 +333,15 @@ void setupSenseAir() {
 }
 
 void setup() {
+    // Дисплей
+    initDisplay();
+    drawDynamicCuteFace();
+
     Serial.begin(115200);
+    // Датчик CO2
+    delay(1000);
+    setupSenseAir();
+    drawDynamicCuteFace();
 
     // Диод
     pinMode(LED_PIN, OUTPUT);
@@ -328,50 +350,50 @@ void setup() {
     // Кнопка
     pinMode(BUTTON_PIN, INPUT);
 
-    // Дисплей
-    initDisplay();
 
-    // Датчик CO2
-    setupSenseAir();
 
     // BLE
     // setupBle();
 
     //WIFI
-    // setupWiFi();
+    setupWiFi();
+    drawDynamicCuteFace();
 
     // Настройка времени
-    // setupTime();
+    setupTime();
+    drawDynamicCuteFace();
 
-    // temperature.fetch();
+    temperature.fetch();
+
+    drawByState();
 }
 
 void loop() {
     unsigned long now = millis();
-    // handleButton(now);
+    handleButton();
 
-    drawHearts();
-    delay(60000);
+    if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
+        lastTempUpdate = now;
+        temperature.fetch();
+    }
 
-    // if (now - lastScreenUpdate >= SCREEN_UPDATE_INTERVAL) {
-    //     lastScreenUpdate = now;
-    //     drawNextScreen();
-    // }
+    if (displayMode == 1) {
+        // Проверка времени по таймеру
+        if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
+            lastTimeCheck = now;
+            struct tm timeinfo;
+            getLocalTime(&timeinfo);
+            if (lastMinute != timeinfo.tm_min) {
+                drawByState();
+            }
+        }
+    }
 
-    // if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
-    //     lastTempUpdate = now;
-    //     temperature.fetch();
-    // }
-
-    // if (displayMode == 1) {
-    //     // Проверка времени по таймеру
-    //     if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
-    //         lastTimeCheck = now;
-    //         struct tm timeinfo;
-    //         getLocalTime(&timeinfo);
-    //         if (lastMinute != timeinfo.tm_min) {
-    //             drawTime();
-    //         }
-    //     }
-    // }
+    if (displayMode == 2) {
+        // Проверка времени по таймеру
+        if (now - lastCO2Update >= CO2_UPDATE_INTERVAL) {
+            lastCO2Update = now;
+            drawByState();
+        }
+    }
 }
