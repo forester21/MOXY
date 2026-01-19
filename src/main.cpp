@@ -375,6 +375,9 @@ void loop() {
     if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
         lastTempUpdate = now;
         temperature.fetch();
+        if (displayMode == 0) {
+            drawByState();
+        }
     }
 
     if (displayMode == 1) {
@@ -389,7 +392,7 @@ void loop() {
         }
     }
 
-    if (displayMode == 2) {
+    if (displayMode == 2 || displayMode == 3) {
         // Проверка времени по таймеру
         if (now - lastCO2Update >= CO2_UPDATE_INTERVAL) {
             lastCO2Update = now;
