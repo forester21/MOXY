@@ -36,6 +36,7 @@ HardwareSerial S8Serial(1);
 GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
 
 S8_UART s8(S8Serial);
+S8_sensor sensor;
 
 // Кнопка
 bool lastButtonState = HIGH;
@@ -212,6 +213,8 @@ void drawHearts() {
 void drawPPM() {
     int co2ppm = s8.get_co2();
 
+    Serial.println("Co2: " + String(co2ppm) + " ppm");
+
     short numberScale = 8;
     int numberOffset = 0;
     display.fillScreen(GxEPD_WHITE);
@@ -333,11 +336,12 @@ void setupSenseAir() {
 }
 
 void setup() {
+    Serial.begin(115200);
+
     // Дисплей
     initDisplay();
     drawDynamicCuteFace();
 
-    Serial.begin(115200);
     // Датчик CO2
     delay(1000);
     setupSenseAir();
@@ -349,8 +353,6 @@ void setup() {
 
     // Кнопка
     pinMode(BUTTON_PIN, INPUT);
-
-
 
     // BLE
     // setupBle();
@@ -368,9 +370,37 @@ void setup() {
     drawByState();
 }
 
+boolean calibrationStarted = false;
+boolean calibrationEnabled = false;
+
+// https://forum.airgradient.com/t/manually-calibrating-the-s8-co2-sensor/33/4
+void calibrateS8() {
+    if (!calibrationEnabled) {
+        return;
+    }
+    Serial.println("Starting manual calibration...");
+
+    if (calibrationStarted) {
+        sensor.ack = s8.get_acknowledgement();
+        if (sensor.ack & S8_MASK_CO2_BACKGROUND_CALIBRATION) {
+            Serial.println("Manual calibration finished!");
+            calibrationEnabled = false;
+            calibrationStarted = false;
+        } else {
+            Serial.println("Calibration in progress...");
+        }
+    } else if (s8.manual_calibration()) {
+        calibrationStarted = true;
+        Serial.println("Manual calibration started successfully!");
+    } else {
+        Serial.println("Error setting manual calibration!");
+    }
+}
+
 void loop() {
     unsigned long now = millis();
     handleButton();
+    // calibrateS8();
 
     if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
         lastTempUpdate = now;
