@@ -12,6 +12,12 @@
 #include <S8_UART.h>
 #include <HardwareSerial.h>
 
+#include <Wire.h>
+#include <SensirionI2cSht4x.h>
+
+//////////////////////////////////////////////////////////////////
+
+// esp32
 // #define LED_PIN 2
 // #define BUTTON_PIN 19
 // #define S8_RX_PIN 32
@@ -22,6 +28,7 @@
 // #define DISPLAY_BUSY_PIN 17
 // HardwareSerial S8Serial(2);
 
+// esp32-c3
 #define LED_PIN 8
 #define BUTTON_PIN 21
 #define S8_RX_PIN 10
@@ -30,12 +37,18 @@
 #define DISPLAY_DC_PIN 2
 #define DISPLAY_RST_PIN 1
 #define DISPLAY_BUSY_PIN 0
+#define SDA_PIN 6
+#define SCL_PIN 4
 HardwareSerial S8Serial(1);
+
+//////////////////////////////////////////////////////////////////
 
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
 // GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
 
 GxEPD2_BW<GxEPD2_290_BS, GxEPD2_290_BS::HEIGHT> display(GxEPD2_290_BS(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
+
+SensirionI2cSht4x sht4x;
 
 S8_UART s8(S8Serial);
 S8_sensor sensor;
@@ -49,13 +62,14 @@ unsigned long lastTimeCheck = 0;
 const unsigned long TIME_CHECK_INTERVAL = 1000; // проверяем время раз в секунду
 
 // Обновление экрана
-unsigned long lastCO2Update = 0;
-const unsigned long CO2_UPDATE_INTERVAL = 60UL * 1000UL; // обновляем CO2 раз в минуту
-int displayMode = 2;
+int lastHeartsState = 0;
+unsigned long lastDisplayUpdate = 0;
+const unsigned long DISPLAY_UPDATE_INTERVAL = 60UL * 1000UL;
+int displayMode = 0;
 int screenRefreshCounter = 0;
 const int FULL_REFRESH_AFTER = 100; // полное обновление экрана после N частичных обновлений
 
-// Обновление температуры
+// Обновление температуры на улице
 unsigned long lastTempUpdate = 0;
 const unsigned long TEMP_UPDATE_INTERVAL = 15UL * 60UL * 1000UL; // обновляем температуру каждые 15 минут
 
@@ -177,7 +191,7 @@ void drawBigNumber(short scale, short xOffset, short yOffset, int number) {
     }
 }
 
-void drawHearts() {
+void drawHearts(bool forceRedraw = true) {
     int co2ppm = s8.get_co2();
 
     // Serial.print("CO2: ");
@@ -196,6 +210,10 @@ void drawHearts() {
     } else {
         heartsState = 11;
     }
+    if (!forceRedraw && heartsState == lastHeartsState) {
+        return;
+    }
+    lastHeartsState = heartsState;
 
     // mini display
     // short scale = 5;
@@ -300,8 +318,27 @@ void drawTime() {
     displayRefresh();
 }
 
+void getIndoorTemp() {
+    float temp;
+    float humidity;
+
+    int16_t error = sht4x.measureHighPrecision(temp, humidity);
+
+    if (error) {
+        Serial.print("SHT40 error: ");
+        Serial.println(error);
+    } else {
+        Serial.print("T=");
+        Serial.print(temp);
+        Serial.print(" °C  H=");
+        Serial.print(humidity);
+        Serial.println(" %");
+    }
+
+}
+
 constexpr int DISPLAY_MODES_COUNT = 4;
-void drawByState() {
+void drawByState(bool forceRedraw = true) {
     displayFullRefreshIfRequired();
     switch (displayMode) {
         case 0:
@@ -311,7 +348,7 @@ void drawByState() {
             drawTime();
             break;
         case 2:
-            drawHearts();
+            drawHearts(forceRedraw);
             break;
         case 3:
             drawPPM();
@@ -358,12 +395,27 @@ void setupSenseAir() {
     Serial.println("SenseAir S8 init...");
 }
 
+void setupSHT4x() {
+    Wire.begin(SDA_PIN, SCL_PIN);
+    //TODO мб удалить
+    Wire.setClock(50000);
+
+    sht4x.begin(Wire, 0x44);
+
+    Serial.println("SHT4x init done");
+}
+
 void setup() {
     Serial.begin(115200);
+    delay(5000);
+    Serial.println("Started serial");
 
     // Дисплей
     initDisplay();
     drawDynamicCuteFace();
+
+    // Датчик температуры и влажности
+    setupSHT4x();
 
     // Датчик CO2
     delay(1000);
@@ -388,7 +440,9 @@ void setup() {
     setupTime();
     drawDynamicCuteFace();
 
+    unsigned long now = millis();
     temperature.fetch();
+    lastTempUpdate = now;
 
     drawByState();
 }
@@ -423,7 +477,6 @@ void calibrateS8() {
 void loop() {
     unsigned long now = millis();
     handleButton();
-    // calibrateS8();
 
     if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
         lastTempUpdate = now;
@@ -447,9 +500,9 @@ void loop() {
 
     if (displayMode == 2 || displayMode == 3) {
         // Проверка времени по таймеру
-        if (now - lastCO2Update >= CO2_UPDATE_INTERVAL) {
-            lastCO2Update = now;
-            drawByState();
+        if (now - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL) {
+            lastDisplayUpdate = now;
+            drawByState(false);
         }
     }
 }
