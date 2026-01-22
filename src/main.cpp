@@ -33,7 +33,9 @@
 HardwareSerial S8Serial(1);
 
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
-GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
+// GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
+
+GxEPD2_BW<GxEPD2_290_BS, GxEPD2_290_BS::HEIGHT> display(GxEPD2_290_BS(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
 
 S8_UART s8(S8Serial);
 S8_sensor sensor;
@@ -49,7 +51,7 @@ const unsigned long TIME_CHECK_INTERVAL = 1000; // проверяем время
 // Обновление экрана
 unsigned long lastCO2Update = 0;
 const unsigned long CO2_UPDATE_INTERVAL = 60UL * 1000UL; // обновляем CO2 раз в минуту
-int displayMode = 0;
+int displayMode = 2;
 int screenRefreshCounter = 0;
 const int FULL_REFRESH_AFTER = 100; // полное обновление экрана после N частичных обновлений
 
@@ -85,9 +87,14 @@ bool isEyesBaseDrawn = false;
 
 void drawDynamicCuteFace() {
     displayFullRefreshIfRequired();
-    short scale = 8;
-    short xOffset = 0;
-    short yOffset = 0;
+    // short scale = 8;
+    // short yOffset = 0;
+    // short xOffset = 0;
+
+    short scale = 9;
+    short xOffset = 10;
+    short yOffset = -10;
+
     draw(scale, xOffset, yOffset, eyesLeftY, 2, eyesLeftX,
          eyesState ? GxEPD_BLACK : GxEPD_WHITE);
     draw(scale, xOffset, yOffset, eyesRightY, 2, eyesRightX,
@@ -190,9 +197,16 @@ void drawHearts() {
         heartsState = 11;
     }
 
-    short scale = 5;
-    short xOffset = -25;
-    short yOffset = -15;
+    // mini display
+    // short scale = 5;
+    // short xOffset = -25;
+    // short yOffset = -15;
+
+    // maxi big
+    short scale = 6;
+    short xOffset = -35;
+    short yOffset = -25;
+
     display.fillScreen(GxEPD_WHITE);
     draw(scale, xOffset, yOffset, heartsBaseY, 14, heartsBaseX, GxEPD_BLACK);
     if (heartsState >= 0) {
@@ -215,7 +229,8 @@ void drawPPM() {
 
     Serial.println("Co2: " + String(co2ppm) + " ppm");
 
-    short numberScale = 8;
+    // short numberScale = 8;
+    short numberScale = 9;
     int numberOffset = 0;
     display.fillScreen(GxEPD_WHITE);
     if (co2ppm >= 1000) {
@@ -235,8 +250,12 @@ const char *weatherUrl =
 Temperature temperature(weatherUrl, LED_PIN);
 
 void drawTemp() {
-    short scale = 8;
-    short xOffset = 0;
+    // short scale = 8;
+    // short xOffset = 0;
+
+    short scale = 9;
+    short xOffset = 20;
+
     short yOffset = 0;
     display.fillScreen(GxEPD_WHITE);
     int firstNumber = abs(temperature.get()) / 10;
@@ -259,8 +278,12 @@ void drawTemp() {
 }
 
 void drawTime() {
-    short scale = 8;
-    short xOffset = 5;
+    // short scale = 8;
+    // short xOffset = 5;
+
+    short scale = 9;
+    short xOffset = 15;
+
     short yOffset = 0;
     struct tm timeinfo;
     //TODO sync daily
