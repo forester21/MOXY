@@ -474,10 +474,7 @@ void calibrateS8() {
     }
 }
 
-void loop() {
-    unsigned long now = millis();
-    handleButton();
-
+void checkTemp(unsigned long now) {
     if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
         lastTempUpdate = now;
         temperature.fetch();
@@ -485,7 +482,9 @@ void loop() {
             drawByState();
         }
     }
+}
 
+void checkTime(unsigned long now) {
     if (displayMode == 1) {
         // Проверка времени по таймеру
         if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
@@ -497,7 +496,9 @@ void loop() {
             }
         }
     }
+}
 
+void checkDisplayRefresh(unsigned long now) {
     if (displayMode == 2 || displayMode == 3) {
         // Проверка времени по таймеру
         if (now - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL) {
@@ -505,4 +506,15 @@ void loop() {
             drawByState(false);
         }
     }
+}
+
+void loop() {
+    unsigned long now = millis();
+    handleButton();
+
+    checkTemp(now);
+
+    checkTime(now);
+
+    checkDisplayRefresh(now);
 }
