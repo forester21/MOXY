@@ -31,8 +31,8 @@
 
 // esp32-c3
 #define LED_PIN 8
-#define BUTTON_PIN 21
-#define BUTTON2_PIN 20
+#define BUTTON_PIN 20
+#define FAV_BUTTON_PIN 21
 #define S8_RX_PIN 10
 // #define S8_TX_PIN 20
 #define S8_TX_PIN 19
@@ -49,7 +49,8 @@ HardwareSerial S8Serial(1);
 // Выбираем вашу модель e-Paper (2.13", BW, B72) — подойдет Waveshare 2.13" HAT
 // GxEPD2_BW<GxEPD2_213_B74, GxEPD2_213_B74::HEIGHT> display(GxEPD2_213_B74(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
 
-GxEPD2_BW<GxEPD2_290_BS, GxEPD2_290_BS::HEIGHT> display(GxEPD2_290_BS(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
+GxEPD2_BW<GxEPD2_290_BS, GxEPD2_290_BS::HEIGHT> display(
+    GxEPD2_290_BS(DISPLAY_CS_PIN, DISPLAY_DC_PIN, DISPLAY_RST_PIN, DISPLAY_BUSY_PIN));
 
 SensirionI2cSht4x sht4x;
 
@@ -75,6 +76,13 @@ const int FULL_REFRESH_AFTER = 100; // полное обновление экр�
 // Обновление температуры на улице
 unsigned long lastTempUpdate = 0;
 const unsigned long TEMP_UPDATE_INTERVAL = 15UL * 60UL * 1000UL; // обновляем температуру каждые 15 минут
+
+// Режим избранное
+bool favMode = false;
+int prevDisplayMode;
+unsigned long lastFavModeOn = 0;
+const unsigned long FAV_MODE_INTERVAL = 3UL * 1000UL;
+const unsigned int FAV_DISPLAY_MODE = 1;
 
 void draw(short scale, short xOffset, short yOffset, const short y[], int ySize, const short x[], uint16_t color) {
     int xIndex = 0;
@@ -285,7 +293,6 @@ void drawTempOrHumidity(int temp, boolean inside, boolean isHumidity = false) {
         draw(scale, xOffset, yOffset + scale, percentY, percentSize, percentX, GxEPD_BLACK);
     } else {
         draw(scale, xOffset, yOffset, tempDegreeY, tempDegreeSize, tempDegreeX, GxEPD_BLACK);
-
     }
     int additionalOffset = 0;
     drawBigNumber(scale, xOffset + 13 * scale, yOffset, secondNumber);
@@ -360,6 +367,7 @@ int getIndoorHumidity() {
 }
 
 constexpr int DISPLAY_MODES_COUNT = 4;
+
 void drawByState(bool forceRedraw = true) {
     displayFullRefreshIfRequired();
     switch (displayMode) {
@@ -379,26 +387,39 @@ void drawByState(bool forceRedraw = true) {
     }
 }
 
+void disableFavMode() {
+    favMode = false;
+    displayMode = prevDisplayMode;
+    drawByState();
+}
+
+void drawFavScreen() {
+    prevDisplayMode = displayMode;
+    favMode = true;
+    lastFavModeOn = millis();
+    displayMode = FAV_DISPLAY_MODE;
+    drawByState();
+}
+
 void drawNextScreen() {
+    Serial.println("Drawing next screen...");
     displayMode = (displayMode + 1) % DISPLAY_MODES_COUNT;
     drawByState();
 }
 
-void drawPrevScreen() {
-    displayMode = (displayMode - 1 + DISPLAY_MODES_COUNT) % DISPLAY_MODES_COUNT;
-    drawByState();
-}
-
-void handleButton(int buttonPin, boolean nextScreen) {
+void handleButton(int buttonPin) {
     bool buttonState = !digitalRead(buttonPin);
 
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
-        Serial.println("Drawing next screen...");
-        if (nextScreen) {
-            drawNextScreen();
+        if (buttonPin == FAV_BUTTON_PIN && displayMode != FAV_DISPLAY_MODE) {
+            drawFavScreen();
         } else {
-            drawPrevScreen();
+            if (favMode) {
+                disableFavMode();
+            } else {
+                drawNextScreen();
+            }
         }
     }
 
@@ -459,7 +480,7 @@ void setup() {
 
     // Кнопка
     pinMode(BUTTON_PIN, INPUT);
-    pinMode(BUTTON2_PIN, INPUT);
+    pinMode(FAV_BUTTON_PIN, INPUT);
 
     // BLE
     // setupBle();
@@ -540,16 +561,24 @@ void checkDisplayRefresh(unsigned long now) {
     }
 }
 
+void checkFavMode(unsigned long now) {
+    if (favMode && now - lastFavModeOn >= FAV_MODE_INTERVAL) {
+        disableFavMode();
+    }
+}
+
 void loop() {
     unsigned long now = millis();
-    handleButton(BUTTON_PIN, true);
-    handleButton(BUTTON2_PIN, false);
+    handleButton(BUTTON_PIN);
+    handleButton(FAV_BUTTON_PIN);
 
     checkTemp(now);
 
     checkTime(now);
 
     checkDisplayRefresh(now);
+
+    checkFavMode(now);
 
     ArduinoOTA.handle();
 }
