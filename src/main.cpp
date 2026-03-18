@@ -268,9 +268,9 @@ void drawPPM() {
 const char *weatherUrl =
         "https://api.open-meteo.com/v1/forecast?latitude=55.998227&longitude=37.210115&current=temperature_2m";
 
-Temperature temperature(weatherUrl, LED_PIN);
+Temperature outdoorTemperature(weatherUrl, LED_PIN);
 
-void drawTemp(int temp) {
+void drawTempOrHumidity(int temp, boolean inside, boolean isHumidity = false) {
     // short scale = 8;
     // short xOffset = 0;
 
@@ -281,7 +281,12 @@ void drawTemp(int temp) {
     display.fillScreen(GxEPD_WHITE);
     int firstNumber = abs(temp) / 10;
     int secondNumber = abs(temp) % 10;
-    draw(scale, xOffset, yOffset, tempDegreeY, tempDegreeSize, tempDegreeX, GxEPD_BLACK);
+    if (isHumidity) {
+        draw(scale, xOffset, yOffset + scale, percentY, percentSize, percentX, GxEPD_BLACK);
+    } else {
+        draw(scale, xOffset, yOffset, tempDegreeY, tempDegreeSize, tempDegreeX, GxEPD_BLACK);
+
+    }
     int additionalOffset = 0;
     drawBigNumber(scale, xOffset + 13 * scale, yOffset, secondNumber);
     if (firstNumber > 0) {
@@ -289,10 +294,16 @@ void drawTemp(int temp) {
     } else {
         additionalOffset = additionalOffset + 6 * scale;
     }
-    if (temp < 0) {
-        draw(scale, xOffset + additionalOffset, yOffset, tempMinusY, tempMinusSize, tempMinusX, GxEPD_BLACK);
-    } else if (temp > 0) {
-        draw(scale, xOffset + additionalOffset, yOffset, tempPlusY, tempPlusSize, tempPlusX, GxEPD_BLACK);
+    if (!isHumidity) {
+        if (temp < 0) {
+            draw(scale, xOffset + additionalOffset, yOffset, tempMinusY, tempMinusSize, tempMinusX, GxEPD_BLACK);
+        } else if (temp > 0) {
+            draw(scale, xOffset + additionalOffset, yOffset, tempPlusY, tempPlusSize, tempPlusX, GxEPD_BLACK);
+        }
+    }
+
+    if (inside) {
+        draw(scale / 3, xOffset + 26 * scale, yOffset + 10 * scale, homeY, homeSize, homeX, GxEPD_BLACK);
     }
 
     displayRefresh();
@@ -341,23 +352,30 @@ int getIndoorTemp() {
     return round(temp);
 }
 
-constexpr int DISPLAY_MODES_COUNT = 3;
+int getIndoorHumidity() {
+    float temp;
+    float humidity;
+    sht4x.measureHighPrecision(temp, humidity);
+    return round(humidity);
+}
+
+constexpr int DISPLAY_MODES_COUNT = 4;
 void drawByState(bool forceRedraw = true) {
     displayFullRefreshIfRequired();
     switch (displayMode) {
         case 0:
-            drawTemp(temperature.get());
-            break;
-        case 1:
             drawTime();
             break;
+        case 1:
+            drawTempOrHumidity(outdoorTemperature.get(), false);
+            break;
         case 2:
-            drawTemp(getIndoorTemp());
+            drawTempOrHumidity(getIndoorTemp(), true);
             // drawHearts(forceRedraw);
             break;
-        // case 3:
-            // drawPPM();
-            // break;
+        case 3:
+            drawTempOrHumidity(getIndoorHumidity(), false, true);
+            break;
     }
 }
 
@@ -455,7 +473,7 @@ void setup() {
     drawDynamicCuteFace();
 
     unsigned long now = millis();
-    temperature.fetch();
+    outdoorTemperature.fetch();
     lastTempUpdate = now;
 
     drawByState();
@@ -491,15 +509,15 @@ void calibrateS8() {
 void checkTemp(unsigned long now) {
     if (now - lastTempUpdate >= TEMP_UPDATE_INTERVAL) {
         lastTempUpdate = now;
-        temperature.fetch();
-        if (displayMode == 0) {
+        outdoorTemperature.fetch();
+        if (displayMode == 1) {
             drawByState();
         }
     }
 }
 
 void checkTime(unsigned long now) {
-    if (displayMode == 1) {
+    if (displayMode == 0) {
         // Проверка времени по таймеру
         if (now - lastTimeCheck >= TIME_CHECK_INTERVAL) {
             lastTimeCheck = now;
