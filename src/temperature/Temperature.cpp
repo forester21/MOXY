@@ -14,7 +14,7 @@ int Temperature::get() const {
 void Temperature::fetch() {
     if (_url == nullptr) return;
 
-    if (_ledPin >= 0) digitalWrite(_ledPin, HIGH);
+    // if (_ledPin >= 0) digitalWrite(_ledPin, HIGH);
     checkWiFiConnection();
 
     HTTPClient http;
@@ -31,5 +31,5 @@ void Temperature::fetch() {
     }
 
     http.end();
-    if (_ledPin >= 0) digitalWrite(_ledPin, LOW);
+    // if (_ledPin >= 0) digitalWrite(_ledPin, LOW);
 }

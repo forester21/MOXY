@@ -1,6 +1,7 @@
 #include "wifi.h"
 
 #include <WiFi.h>
+#include <ArduinoOTA.h>
 
 const char *ssid = "forester2g";
 const char *password = "zcbm0000";
@@ -15,6 +16,7 @@ void setupWiFi() {
     }
 
     Serial.println("\nWiFi connected");
+    ArduinoOTA.begin();
 }
 
 void checkWiFiConnection() {

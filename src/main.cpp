@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <GxEPD2_BW.h> // библиотека для черно-белых дисплеев
 #include <HTTPClient.h>
+#include <ArduinoOTA.h>
 
 #include "image/img.h"
 #include "image/img_time.h"
@@ -37,8 +38,8 @@
 #define DISPLAY_DC_PIN 2
 #define DISPLAY_RST_PIN 1
 #define DISPLAY_BUSY_PIN 0
-#define SDA_PIN 6
-#define SCL_PIN 4
+#define SDA_PIN 8
+#define SCL_PIN 9
 HardwareSerial S8Serial(1);
 
 //////////////////////////////////////////////////////////////////
@@ -267,7 +268,7 @@ const char *weatherUrl =
 
 Temperature temperature(weatherUrl, LED_PIN);
 
-void drawTemp() {
+void drawTemp(int temp) {
     // short scale = 8;
     // short xOffset = 0;
 
@@ -276,8 +277,8 @@ void drawTemp() {
 
     short yOffset = 0;
     display.fillScreen(GxEPD_WHITE);
-    int firstNumber = abs(temperature.get()) / 10;
-    int secondNumber = abs(temperature.get()) % 10;
+    int firstNumber = abs(temp) / 10;
+    int secondNumber = abs(temp) % 10;
     draw(scale, xOffset, yOffset, tempDegreeY, tempDegreeSize, tempDegreeX, GxEPD_BLACK);
     int additionalOffset = 0;
     drawBigNumber(scale, xOffset + 13 * scale, yOffset, secondNumber);
@@ -286,9 +287,9 @@ void drawTemp() {
     } else {
         additionalOffset = additionalOffset + 6 * scale;
     }
-    if (temperature.get() < 0) {
+    if (temp < 0) {
         draw(scale, xOffset + additionalOffset, yOffset, tempMinusY, tempMinusSize, tempMinusX, GxEPD_BLACK);
-    } else if (temperature.get() > 0) {
+    } else if (temp > 0) {
         draw(scale, xOffset + additionalOffset, yOffset, tempPlusY, tempPlusSize, tempPlusX, GxEPD_BLACK);
     }
 
@@ -318,7 +319,7 @@ void drawTime() {
     displayRefresh();
 }
 
-void getIndoorTemp() {
+int getIndoorTemp() {
     float temp;
     float humidity;
 
@@ -335,24 +336,26 @@ void getIndoorTemp() {
         Serial.println(" %");
     }
 
+    return round(temp);
 }
 
-constexpr int DISPLAY_MODES_COUNT = 4;
+constexpr int DISPLAY_MODES_COUNT = 3;
 void drawByState(bool forceRedraw = true) {
     displayFullRefreshIfRequired();
     switch (displayMode) {
         case 0:
-            drawTemp();
+            drawTemp(temperature.get());
             break;
         case 1:
             drawTime();
             break;
         case 2:
-            drawHearts(forceRedraw);
+            drawTemp(getIndoorTemp());
+            // drawHearts(forceRedraw);
             break;
-        case 3:
-            drawPPM();
-            break;
+        // case 3:
+            // drawPPM();
+            // break;
     }
 }
 
@@ -366,6 +369,7 @@ void handleButton() {
 
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
+        Serial.println("Drawing next screen...");
         drawNextScreen();
     }
 
@@ -396,10 +400,8 @@ void setupSenseAir() {
 }
 
 void setupSHT4x() {
-    Wire.begin(SDA_PIN, SCL_PIN);
-    //TODO мб удалить
+    Wire.begin(SCL_PIN, SDA_PIN);
     Wire.setClock(50000);
-
     sht4x.begin(Wire, 0x44);
 
     Serial.println("SHT4x init done");
@@ -419,12 +421,12 @@ void setup() {
 
     // Датчик CO2
     delay(1000);
-    setupSenseAir();
+    // setupSenseAir();
     drawDynamicCuteFace();
 
     // Диод
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW);
+    // pinMode(LED_PIN, OUTPUT);
+    // digitalWrite(LED_PIN, LOW);
 
     // Кнопка
     pinMode(BUTTON_PIN, INPUT);
@@ -517,4 +519,6 @@ void loop() {
     checkTime(now);
 
     checkDisplayRefresh(now);
+
+    ArduinoOTA.handle();
 }
