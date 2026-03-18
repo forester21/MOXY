@@ -32,8 +32,10 @@
 // esp32-c3
 #define LED_PIN 8
 #define BUTTON_PIN 21
+#define BUTTON2_PIN 20
 #define S8_RX_PIN 10
-#define S8_TX_PIN 20
+// #define S8_TX_PIN 20
+#define S8_TX_PIN 19
 #define DISPLAY_CS_PIN 3
 #define DISPLAY_DC_PIN 2
 #define DISPLAY_RST_PIN 1
@@ -364,13 +366,22 @@ void drawNextScreen() {
     drawByState();
 }
 
-void handleButton() {
-    bool buttonState = !digitalRead(BUTTON_PIN);
+void drawPrevScreen() {
+    displayMode = (displayMode - 1 + DISPLAY_MODES_COUNT) % DISPLAY_MODES_COUNT;
+    drawByState();
+}
+
+void handleButton(int buttonPin, boolean nextScreen) {
+    bool buttonState = !digitalRead(buttonPin);
 
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
         Serial.println("Drawing next screen...");
-        drawNextScreen();
+        if (nextScreen) {
+            drawNextScreen();
+        } else {
+            drawPrevScreen();
+        }
     }
 
     lastButtonState = buttonState;
@@ -430,6 +441,7 @@ void setup() {
 
     // Кнопка
     pinMode(BUTTON_PIN, INPUT);
+    pinMode(BUTTON2_PIN, INPUT);
 
     // BLE
     // setupBle();
@@ -512,7 +524,8 @@ void checkDisplayRefresh(unsigned long now) {
 
 void loop() {
     unsigned long now = millis();
-    handleButton();
+    handleButton(BUTTON_PIN, true);
+    handleButton(BUTTON2_PIN, false);
 
     checkTemp(now);
 
