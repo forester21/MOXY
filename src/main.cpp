@@ -84,6 +84,22 @@ unsigned long lastFavModeOn = 0;
 const unsigned long FAV_MODE_INTERVAL = 3UL * 1000UL;
 const unsigned int FAV_DISPLAY_MODE = 1;
 
+WiFiServer telnetServer(23);
+WiFiClient telnetClient;
+unsigned long lastHeapLog = 0;
+
+void logf(const char* fmt, ...) {
+    char buf[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    if (telnetClient && telnetClient.connected()) {
+        telnetClient.println(buf);
+    }
+}
+
 void draw(short scale, short xOffset, short yOffset, const short y[], int ySize, const short x[], uint16_t color) {
     int xIndex = 0;
     for (int i = 0; i < ySize; i++) {
@@ -497,6 +513,11 @@ void setup() {
     outdoorTemperature.fetch();
     lastTempUpdate = now;
 
+    drawDynamicCuteFace();
+    telnetServer.begin();
+    telnetServer.setNoDelay(true);
+    logf("Reset reason: %d", esp_reset_reason());
+
     drawByState();
 }
 
@@ -567,6 +588,25 @@ void checkFavMode(unsigned long now) {
     }
 }
 
+void logToTelnet() {
+    if (telnetServer.hasClient()) {
+        if (!telnetClient || !telnetClient.connected()) {
+            telnetClient = telnetServer.available();
+            logf("Telnet client connected");
+            logf("Reset reason: %d", esp_reset_reason());
+            logf("Min free heap: %uk", esp_get_minimum_free_heap_size() / 1000);
+        } else {
+            WiFiClient newClient = telnetServer.available();
+            newClient.stop(); // only one client
+        }
+    }
+
+    if (millis() - lastHeapLog > 5000) {
+        lastHeapLog = millis();
+        logf("uptime=%lu sec, heap=%uk", millis() / 1000, ESP.getFreeHeap() / 1000);
+    }
+}
+
 void loop() {
     unsigned long now = millis();
     handleButton(BUTTON_PIN);
@@ -579,6 +619,8 @@ void loop() {
     checkDisplayRefresh(now);
 
     checkFavMode(now);
+
+    logToTelnet();
 
     ArduinoOTA.handle();
 }
