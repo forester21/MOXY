@@ -33,9 +33,8 @@
 #define LED_PIN 8
 #define BUTTON_PIN 20
 #define FAV_BUTTON_PIN 21
-#define S8_RX_PIN 10
-// #define S8_TX_PIN 20
-#define S8_TX_PIN 19
+#define S8_RX_PIN 5
+#define S8_TX_PIN 10
 #define DISPLAY_CS_PIN 3
 #define DISPLAY_DC_PIN 2
 #define DISPLAY_RST_PIN 1
@@ -70,6 +69,7 @@ int lastHeartsState = 0;
 unsigned long lastDisplayUpdate = 0;
 const unsigned long DISPLAY_UPDATE_INTERVAL = 60UL * 1000UL;
 int displayMode = 0;
+constexpr int DISPLAY_MODES_COUNT = 6;
 int screenRefreshCounter = 0;
 const int FULL_REFRESH_AFTER = 100; // полное обновление экрана после N частичных обновлений
 
@@ -290,7 +290,7 @@ void drawPPM() {
 }
 
 const char *weatherUrl =
-        "https://api.open-meteo.com/v1/forecast?latitude=55.998227&longitude=37.210115&current=temperature_2m";
+        "https://api.open-meteo.com/v1/forecast?latitude=55.998227&longitude=37.210115&current=temperature_2m&timezone=Europe/Moscow&forecast_days=1&hourly=temperature_2m";
 
 Temperature outdoorTemperature(weatherUrl, LED_PIN);
 
@@ -382,8 +382,6 @@ int getIndoorHumidity() {
     return round(humidity);
 }
 
-constexpr int DISPLAY_MODES_COUNT = 4;
-
 void drawByState(bool forceRedraw = true) {
     displayFullRefreshIfRequired();
     switch (displayMode) {
@@ -391,7 +389,7 @@ void drawByState(bool forceRedraw = true) {
             drawTime();
             break;
         case 1:
-            drawTempOrHumidity(outdoorTemperature.get(), false);
+            drawTempOrHumidity(outdoorTemperature.getCurrentTemp(), false);
             break;
         case 2:
             drawTempOrHumidity(getIndoorTemp(), true);
@@ -399,6 +397,12 @@ void drawByState(bool forceRedraw = true) {
             break;
         case 3:
             drawTempOrHumidity(getIndoorHumidity(), false, true);
+            break;
+        case 4:
+            drawPPM();
+            break;
+        case 5:
+            drawHearts();
             break;
     }
 }
@@ -487,7 +491,7 @@ void setup() {
 
     // Датчик CO2
     delay(1000);
-    // setupSenseAir();
+    setupSenseAir();
     drawDynamicCuteFace();
 
     // Диод
@@ -573,7 +577,7 @@ void checkTime(unsigned long now) {
 }
 
 void checkDisplayRefresh(unsigned long now) {
-    if (displayMode == 2 || displayMode == 3) {
+    if (displayMode == 2 || displayMode == 3 || displayMode == 4 || displayMode == 5) {
         // Проверка времени по таймеру
         if (now - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL) {
             lastDisplayUpdate = now;
