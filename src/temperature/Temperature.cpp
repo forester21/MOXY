@@ -5,10 +5,15 @@
 
 #include "wifi/wifi.h"
 
-Temperature::Temperature(const char* url, int ledPin) : _url(url), _temp(0), _ledPin(ledPin) {}
+Temperature::Temperature(const char *url, int ledPin) : _url(url), _temp(0), _maxTemp(0), _ledPin(ledPin) {
+}
 
-int Temperature::get() const {
+int Temperature::getCurrentTemp() const {
     return _temp;
+}
+
+int Temperature::getMaxDailyTemp() const {
+    return _maxTemp;
 }
 
 void Temperature::fetch() {
@@ -28,6 +33,20 @@ void Temperature::fetch() {
         deserializeJson(doc, http.getString());
 
         _temp = round(doc["current"]["temperature_2m"].as<float>());
+        JsonArray hourlyTemps = doc["hourly"]["temperature_2m"].as<JsonArray>();
+
+        if (!hourlyTemps.isNull() && hourlyTemps.size() > 0) {
+            float maxTemp = hourlyTemps[0].as<float>();
+
+            for (JsonVariant value: hourlyTemps) {
+                float temp = value.as<float>();
+                if (temp > maxTemp) {
+                    maxTemp = temp;
+                }
+            }
+
+            _maxTemp = round(maxTemp);
+        }
     }
 
     http.end();
