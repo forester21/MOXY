@@ -257,11 +257,11 @@ void drawHearts(bool forceRedraw = true) {
     if (heartsState >= 0) {
         for (int i = 0; i <= heartsState; i++) {
             if (i % 2 == 0) {
-                draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingHalfY,
+                draw(scale, xOffset + i % 6 / 2 * scale * 14, yOffset + i / 6 * scale * 9, heartFillingHalfY,
                      heartFillingHalfSize, heartFillingHalfX, GxEPD_BLACK);
             } else {
                 // TODO заменить full на правую половину
-                draw(scale, xOffset + i % 6 / 2 * scale * 15, yOffset + i / 6 * scale * 11, heartFillingFullY,
+                draw(scale, xOffset + i % 6 / 2 * scale * 14, yOffset + i / 6 * scale * 9, heartFillingFullY,
                      heartFillingFullSize, heartFillingFullX, GxEPD_BLACK);
             }
         }
