@@ -276,16 +276,17 @@ void drawPPM() {
 
     // short numberScale = 8;
     short numberScale = 9;
-    int numberOffset = 0;
+    int xOffset = 20;
+    short yOffset = 0;
     display.fillScreen(GxEPD_WHITE);
     if (co2ppm >= 1000) {
-        drawSmallNumber(numberScale, 0, 0, co2ppm / 1000);
-        numberOffset = 6 * numberScale;
+        drawSmallNumber(numberScale, xOffset, yOffset, co2ppm / 1000);
     }
-    drawSmallNumber(numberScale, numberOffset, 0, (co2ppm / 100) % 10);
-    drawSmallNumber(numberScale, numberOffset + 6 * numberScale, 0, (co2ppm / 10) % 10);
-    drawSmallNumber(numberScale, numberOffset + 12 * numberScale, 0, co2ppm % 10);
-    draw(3, numberOffset + 19 * numberScale, 3, ppmY, ppmSize, ppmX, GxEPD_BLACK);
+    drawSmallNumber(numberScale, xOffset + 6 * numberScale, yOffset, (co2ppm / 100) % 10);
+    drawSmallNumber(numberScale, xOffset + 12 * numberScale, yOffset, (co2ppm / 10) % 10);
+    drawSmallNumber(numberScale, xOffset + 18 * numberScale, yOffset, co2ppm % 10);
+    // draw(3, numberOffset + 25 * numberScale, 12, ppmY, ppmSize, ppmX, GxEPD_BLACK);
+    draw(6, xOffset + 26 * numberScale, yOffset + 18, ppm2Y, ppm2Size, ppm2X, GxEPD_BLACK);
     displayRefresh();
 }
 
