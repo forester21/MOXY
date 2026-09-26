@@ -289,10 +289,7 @@ void drawPPM() {
     displayRefresh();
 }
 
-const char *weatherUrl =
-        "https://api.open-meteo.com/v1/forecast?latitude=55.998227&longitude=37.210115&current=temperature_2m&timezone=Europe/Moscow&forecast_days=1&hourly=temperature_2m";
-
-Temperature outdoorTemperature(weatherUrl, LED_PIN);
+Temperature outdoorTemperature(LED_PIN);
 
 void drawTempOrHumidity(int temp, boolean inside, boolean isHumidity = false) {
     // short scale = 8;

@@ -4,8 +4,9 @@
 #include <math.h>
 
 #include "wifi/wifi.h"
+#include "secrets.h"
 
-Temperature::Temperature(const char *url, int ledPin) : _url(url), _temp(0), _maxTemp(0), _ledPin(ledPin) {
+Temperature::Temperature(int ledPin) : _temp(0), _maxTemp(0), _ledPin(ledPin) {
 }
 
 int Temperature::getCurrentTemp() const {
@@ -17,15 +18,14 @@ int Temperature::getMaxDailyTemp() const {
 }
 
 void Temperature::fetch() {
-    if (_url == nullptr) return;
-
     // if (_ledPin >= 0) digitalWrite(_ledPin, HIGH);
     checkWiFiConnection();
 
     HTTPClient http;
-    String url = String(_url);
-
+    String url = String(WEATHER_SERVER_URL) + "?latitude=55.998227&longitude=37.210115&current=temperature_2m&timezone=Europe/Moscow&forecast_days=1&hourly=temperature_2m";
     http.begin(url);
+    http.addHeader("X-Api-Key", WEATHER_API_KEY);
+
     int httpCode = http.GET();
 
     if (httpCode == 200) {
