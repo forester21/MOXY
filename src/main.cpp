@@ -31,8 +31,8 @@
 
 // esp32-c3
 #define LED_PIN 8
-#define BUTTON_PIN 20
-#define FAV_BUTTON_PIN 21
+#define FAV_BUTTON_PIN 20
+#define BUTTON_PIN 21
 #define S8_RX_PIN 5
 #define S8_TX_PIN 10
 #define DISPLAY_CS_PIN 3
@@ -57,7 +57,8 @@ S8_UART s8(S8Serial);
 S8_sensor sensor;
 
 // Кнопка
-bool lastButtonState = HIGH;
+int lastButtonState = LOW;
+int lastFavButtonState = LOW;
 
 // Обновление времени
 int lastMinute = 0;
@@ -88,7 +89,7 @@ WiFiServer telnetServer(23);
 WiFiClient telnetClient;
 unsigned long lastHeapLog = 0;
 
-void logf(const char* fmt, ...) {
+void logf(const char *fmt, ...) {
     char buf[256];
     va_list args;
     va_start(args, fmt);
@@ -425,23 +426,30 @@ void drawNextScreen() {
     drawByState();
 }
 
-void handleButton(int buttonPin) {
-    bool buttonState = !digitalRead(buttonPin);
-
+void handleButton() {
+    int buttonState = digitalRead(BUTTON_PIN);
     // ловим момент нажатия
     if (buttonState == HIGH && lastButtonState == LOW) {
-        if (buttonPin == FAV_BUTTON_PIN && displayMode != FAV_DISPLAY_MODE) {
-            drawFavScreen();
+        if (favMode) {
+            disableFavMode();
         } else {
-            if (favMode) {
-                disableFavMode();
-            } else {
-                drawNextScreen();
-            }
+            drawNextScreen();
         }
     }
-
     lastButtonState = buttonState;
+}
+
+void handleFavButton() {
+    int buttonState = digitalRead(FAV_BUTTON_PIN);
+    // ловим момент нажатия
+    if (buttonState == HIGH && lastFavButtonState == LOW) {
+        if (displayMode != FAV_DISPLAY_MODE) {
+            drawFavScreen();
+        } else {
+            disableFavMode();
+        }
+    }
+    lastFavButtonState = buttonState;
 }
 
 void initDisplay() {
@@ -611,8 +619,8 @@ void logToTelnet() {
 
 void loop() {
     unsigned long now = millis();
-    handleButton(BUTTON_PIN);
-    handleButton(FAV_BUTTON_PIN);
+    handleButton();
+    handleFavButton();
 
     checkTemp(now);
 
